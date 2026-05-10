@@ -1,33 +1,94 @@
 # pwam-shopping-mobile
 
-Expo (React Native) mobile frontend for the PWAM Global Shopping List demo.
+React Native (Expo) mobile frontend for the **Global Shopping List** — a PWAM demo showing how one backend serves multiple platforms simultaneously.
+
+Built with **Expo** (managed workflow) and **React Native**.
+
+---
+
+## Prerequisites
+
+- Node.js ≥ 18
+- npm
+- [Expo Go](https://expo.dev/client) app on your phone **or** an Android/iOS emulator
+- The backend running at `http://localhost:3000` (see [pwam-shopping-backend](https://github.com/eben4ya/pwam-shopping-backend))
+
+---
 
 ## Setup
 
 ```bash
+# 1. Install dependencies
 npm install
+
+# 2. Copy the env template and set the correct API URL
+cp .env.example .env
+
+# 3. Start the Expo dev server
 npx expo start
 ```
 
-Scan the QR code with Expo Go (Android/iOS) or press `a` for Android emulator.
+Then:
+- Press `a` to open on Android emulator
+- Press `i` to open on iOS simulator (macOS only)
+- Scan the QR code with **Expo Go** on your phone
 
-## API URL
+---
 
-The API base URL is set at the top of `App.js`:
+## Environment Variables
 
-```js
-// Android emulator → backend on host machine
-const API = 'http://10.0.2.2:3000';
+| Variable | Description |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | Backend API base URL |
 
-// iOS simulator or Expo Go on physical device → change to:
-// const API = 'http://localhost:3000';
+Choose the right value for your setup:
+
+```bash
+# Android emulator
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3000
+
+# iOS simulator or Expo Go on same machine
+EXPO_PUBLIC_API_URL=http://localhost:3000
+
+# Physical device (replace with your machine's local IP)
+EXPO_PUBLIC_API_URL=http://192.168.x.x:3000
 ```
 
-Requires the backend running at `http://localhost:3000` on the host machine.
+> **Never commit `.env` to version control.** Use `.env.example` as the template.
+>
+> All Expo public env vars must be prefixed with `EXPO_PUBLIC_` to be bundled into the app.
+
+---
 
 ## Features
 
-- View all shopping list items (auto-refreshes every 3 seconds)
-- Add items via the input form
-- Tap checkbox to mark items as checked/unchecked
-- Tap ✕ to delete an item (with confirmation dialog)
+| Action | Gesture |
+|---|---|
+| View items (auto-refresh every 3 s) | Open app |
+| Add item | Type in input → tap **+** or press Enter |
+| Edit item | Tap **Edit** pill → edit in bottom sheet → Save |
+| Check / uncheck item | Tap the circle on the right |
+| Delete item | Tap anywhere on the item row → confirm in dialog |
+
+---
+
+## Project Structure
+
+```
+pwam-shopping-mobile/
+├── .env.example   ← copy to .env
+├── .gitignore
+├── app.json       ← Expo app config
+├── index.js       ← Expo entry point
+└── App.js         ← full app (components + styles)
+```
+
+---
+
+## Ideas for Improvement
+
+- Split `App.js` into separate component files
+- Add swipe-to-delete gesture (`react-native-gesture-handler`)
+- Add offline support with `AsyncStorage`
+- Add push notifications when the list is updated
+- Build a standalone APK/IPA with `eas build`

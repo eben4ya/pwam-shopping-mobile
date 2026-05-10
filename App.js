@@ -14,9 +14,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-// Android emulator: 10.0.2.2 reaches the host machine's localhost.
-// iOS simulator / Expo Go on device: change to http://localhost:3000
-const API = 'http://10.0.2.2:3000';
+const API = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
 
 const YELLOW = '#FFD600';
 const BLACK  = '#1A1A1A';

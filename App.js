@@ -14,33 +14,36 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-// Android emulator uses 10.0.2.2 to reach the host machine's localhost.
-// iOS simulator and Expo Go on device can use localhost directly.
+// Android emulator: 10.0.2.2 reaches the host machine's localhost.
+// iOS simulator / Expo Go on device: change to http://localhost:3000
 const API = 'http://10.0.2.2:3000';
+
+const YELLOW = '#FFD600';
+const BLACK  = '#1A1A1A';
+const GRAY   = '#9CA3AF';
+const LIGHT  = '#F3F4F6';
 
 /* ── Edit Modal ─────────────────────────────────────── */
 function EditModal({ item, onSave, onCancel }) {
-  const [val, setVal] = useState(item?.name ?? '');
+  const [val, setVal] = useState('');
 
   useEffect(() => {
     if (item) setVal(item.name);
   }, [item]);
 
   const handleSave = () => {
-    if (!val.trim() || val.trim() === item.name) {
-      onCancel();
-      return;
-    }
+    if (!val.trim()) { onCancel(); return; }
     onSave(item.id, val.trim());
   };
 
   return (
-    <Modal transparent animationType="fade" visible={!!item} onRequestClose={onCancel}>
+    <Modal transparent animationType="slide" visible={!!item} onRequestClose={onCancel}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
+        style={styles.modalOverlay}
       >
-        <View style={styles.modalCard}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>Edit Item</Text>
           <TextInput
             style={styles.modalInput}
@@ -50,13 +53,15 @@ function EditModal({ item, onSave, onCancel }) {
             selectTextOnFocus
             returnKeyType="done"
             onSubmitEditing={handleSave}
+            placeholder="Item name"
+            placeholderTextColor={GRAY}
           />
           <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={onCancel}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Save</Text>
+            <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSave}>
+              <Text style={styles.modalSaveText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -65,26 +70,59 @@ function EditModal({ item, onSave, onCancel }) {
   );
 }
 
+/* ── Item Row ───────────────────────────────────────── */
+function ItemRow({ item, index, onToggle, onEdit, onDelete }) {
+  return (
+    <View style={styles.item}>
+      {/* Index number */}
+      <Text style={styles.itemIndex}>{String(index + 1).padStart(2, '0')}</Text>
+
+      {/* Name block */}
+      <View style={styles.itemBody}>
+        <Text
+          style={[styles.itemName, item.checked && styles.itemNameDone]}
+          numberOfLines={2}
+        >
+          {item.name}
+        </Text>
+      </View>
+
+      {/* Edit button — explicit text label so it's always visible */}
+      <TouchableOpacity style={styles.editPill} onPress={() => onEdit(item)}>
+        <Text style={styles.editPillText}>Edit</Text>
+      </TouchableOpacity>
+
+      {/* Circle checkbox / delete — tap to toggle, long-press to delete */}
+      <TouchableOpacity
+        style={[styles.circle, item.checked && styles.circleChecked]}
+        onPress={() => onToggle(item)}
+        onLongPress={() => onDelete(item)}
+        delayLongPress={500}
+      >
+        {item.checked && <Text style={styles.circleCheck}>✓</Text>}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 /* ── App ────────────────────────────────────────────── */
 export default function App() {
-  const [items, setItems] = useState([]);
-  const [input, setInput] = useState('');
+  const [items, setItems]         = useState([]);
+  const [input, setInput]         = useState('');
   const [editTarget, setEditTarget] = useState(null);
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/items`);
+      const res  = await fetch(`${API}/items`);
       const data = await res.json();
       setItems(data);
-    } catch {
-      // backend not reachable — silent fail so UI stays usable
-    }
+    } catch { /* silent — backend not reachable */ }
   }, []);
 
   useEffect(() => {
     fetchItems();
-    const interval = setInterval(fetchItems, 3000);
-    return () => clearInterval(interval);
+    const id = setInterval(fetchItems, 3000);
+    return () => clearInterval(id);
   }, [fetchItems]);
 
   const addItem = async () => {
@@ -98,7 +136,7 @@ export default function App() {
       setInput('');
       fetchItems();
     } catch {
-      Alert.alert('Error', 'Could not connect to backend.');
+      Alert.alert('Error', 'Could not connect to the backend.');
     }
   };
 
@@ -138,42 +176,11 @@ export default function App() {
   };
 
   const checkedCount = items.filter((i) => i.checked).length;
-
-  const renderItem = ({ item }) => (
-    <View style={styles.item}>
-      <TouchableOpacity onPress={() => toggleItem(item)} style={styles.checkboxArea}>
-        <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
-          {item.checked && <Text style={styles.checkmark}>✓</Text>}
-        </View>
-      </TouchableOpacity>
-
-      <Text
-        style={[styles.itemName, item.checked && styles.itemNameChecked]}
-        numberOfLines={2}
-      >
-        {item.name}
-      </Text>
-
-      <View style={styles.itemActions}>
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => setEditTarget(item)}
-        >
-          <Text style={styles.editBtnText}>✏️</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => confirmDelete(item)}
-        >
-          <Text style={styles.deleteBtnText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={styles.root}>
+      <StatusBar style="dark" backgroundColor={YELLOW} />
 
       <EditModal
         item={editTarget}
@@ -181,303 +188,354 @@ export default function App() {
         onCancel={() => setEditTarget(null)}
       />
 
-      {/* Header */}
+      {/* ── Yellow header ── */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.title}>🛒 Global Shopping List</Text>
-            <Text style={styles.subtitle}>PWAM Demo — Mobile Frontend</Text>
-          </View>
+        <Text style={styles.appName}>Shopping List.</Text>
+        <Text style={styles.appSub}>PWAM Demo  ·  {today}</Text>
+      </View>
+
+      {/* ── White content card ── */}
+      <View style={styles.card}>
+
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <Text style={styles.statsLabel}>
+            Items <Text style={styles.statsCount}>({items.length})</Text>
+          </Text>
           {items.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{checkedCount}/{items.length}</Text>
-            </View>
+            <Text style={styles.statsDone}>{checkedCount} done</Text>
           )}
         </View>
-      </View>
 
-      {/* Add form */}
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="What do you need?"
-          onSubmitEditing={addItem}
-          returnKeyType="done"
-          placeholderTextColor="#94a3b8"
-        />
-        <TouchableOpacity style={styles.addBtn} onPress={addItem}>
-          <Text style={styles.addBtnText}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* List */}
-      {items.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>🧺</Text>
-          <Text style={styles.emptyText}>The list is empty.</Text>
-          <Text style={styles.emptyHint}>Add something above to get started.</Text>
+        {/* Add input */}
+        <View style={styles.addRow}>
+          <TextInput
+            style={styles.addInput}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Add a new item…"
+            placeholderTextColor={GRAY}
+            onSubmitEditing={addItem}
+            returnKeyType="done"
+          />
+          <TouchableOpacity style={styles.addBtn} onPress={addItem}>
+            <Text style={styles.addBtnText}>+</Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* List */}
+        {items.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyIcon}>🧺</Text>
+            <Text style={styles.emptyText}>Your list is empty</Text>
+            <Text style={styles.emptyHint}>Add the first item above</Text>
+          </View>
+        ) : (
           <FlatList
             data={items}
             keyExtractor={(item) => String(item.id)}
-            renderItem={renderItem}
+            renderItem={({ item, index }) => (
+              <ItemRow
+                item={item}
+                index={index}
+                onToggle={toggleItem}
+                onEdit={setEditTarget}
+                onDelete={confirmDelete}
+              />
+            )}
             contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
+        )}
+
+        {/* Footer hint */}
+        {items.length > 0 && (
           <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              {checkedCount === items.length
-                ? '✅ All items checked!'
-                : `${items.length - checkedCount} item${items.length - checkedCount !== 1 ? 's' : ''} remaining`}
-            </Text>
+            <Text style={styles.footerHint}>Long-press circle to delete</Text>
           </View>
-        </>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
 /* ── Styles ─────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: YELLOW,
   },
+
+  /* Header */
   header: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    backgroundColor: YELLOW,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 28,
   },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  appName: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: BLACK,
+    letterSpacing: -0.5,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontWeight: '600',
+  appSub: {
     fontSize: 13,
+    color: '#5A5A00',
+    marginTop: 4,
   },
-  form: {
-    flexDirection: 'row',
-    padding: 14,
-    gap: 8,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  input: {
+
+  /* White card */
+  card: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
     backgroundColor: '#fff',
-    color: '#1e293b',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+
+  /* Stats */
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 14,
+  },
+  statsLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BLACK,
+  },
+  statsCount: {
+    color: GRAY,
+    fontWeight: '400',
+  },
+  statsDone: {
+    fontSize: 13,
+    color: GRAY,
+  },
+
+  /* Add row */
+  addRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  addInput: {
+    flex: 1,
+    height: 46,
+    backgroundColor: LIGHT,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: BLACK,
   },
   addBtn: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    width: 46,
+    height: 46,
+    backgroundColor: YELLOW,
+    borderRadius: 12,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   addBtnText: {
-    color: '#fff',
+    fontSize: 26,
     fontWeight: '700',
-    fontSize: 15,
+    color: BLACK,
+    lineHeight: 30,
   },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginBottom: 4,
+  },
+
+  /* List */
   list: {
-    padding: 14,
-    gap: 8,
+    paddingVertical: 8,
   },
+  separator: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+  },
+
+  /* Item row */
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    paddingVertical: 14,
+    gap: 10,
   },
-  checkboxArea: {
-    marginRight: 12,
+  itemIndex: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: GRAY,
+    width: 24,
+    textAlign: 'right',
+    flexShrink: 0,
   },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
+  itemBody: {
+    flex: 1,
   },
   itemName: {
-    flex: 1,
     fontSize: 15,
-    color: '#1e293b',
+    fontWeight: '600',
+    color: BLACK,
   },
-  itemNameChecked: {
+  itemNameDone: {
     textDecorationLine: 'line-through',
-    color: '#94a3b8',
+    color: GRAY,
+    fontWeight: '400',
   },
-  itemActions: {
-    flexDirection: 'row',
-    gap: 6,
-    marginLeft: 8,
-  },
-  editBtn: {
-    backgroundColor: '#f1f5f9',
+
+  /* Edit pill button */
+  editPill: {
+    backgroundColor: '#FFF9C4',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 7,
-    padding: 6,
+    borderColor: '#FFD600',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
   },
-  editBtnText: {
+  editPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7A6800',
+  },
+
+  /* Circle checkbox */
+  circle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  circleChecked: {
+    backgroundColor: YELLOW,
+    borderColor: YELLOW,
+  },
+  circleCheck: {
     fontSize: 14,
+    fontWeight: '800',
+    color: BLACK,
   },
-  deleteBtn: {
-    backgroundColor: '#fff5f5',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: 7,
-    padding: 6,
-  },
-  deleteBtnText: {
-    fontSize: 14,
-  },
+
+  /* Empty */
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
+    paddingVertical: 60,
   },
   emptyIcon: {
-    fontSize: 52,
-    marginBottom: 12,
+    fontSize: 56,
+    marginBottom: 14,
   },
   emptyText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: BLACK,
+    marginBottom: 6,
   },
   emptyHint: {
     fontSize: 13,
-    color: '#94a3b8',
-    textAlign: 'center',
+    color: GRAY,
   },
+
+  /* Footer */
   footer: {
-    padding: 14,
+    paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: '#F3F4F6',
   },
-  footerText: {
-    fontSize: 13,
-    color: '#64748b',
+  footerHint: {
+    fontSize: 11,
+    color: '#C4C4C4',
   },
-  /* Edit Modal */
-  overlay: {
+
+  /* Edit Modal — bottom sheet style */
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  modalCard: {
+  modalSheet: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 18,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 14,
-    textAlign: 'center',
+    fontWeight: '800',
+    color: BLACK,
+    marginBottom: 16,
   },
   modalInput: {
-    borderWidth: 1.5,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    padding: 12,
+    height: 50,
+    backgroundColor: LIGHT,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     fontSize: 15,
-    color: '#1e293b',
+    color: BLACK,
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: YELLOW,
   },
   modalActions: {
     flexDirection: 'row',
     gap: 10,
   },
-  cancelBtn: {
+  modalCancelBtn: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#e2e8f0',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  cancelBtnText: {
+  modalCancelText: {
     fontSize: 15,
-    color: '#374151',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
   },
-  saveBtn: {
+  modalSaveBtn: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#2563eb',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: YELLOW,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  saveBtnText: {
+  modalSaveText: {
     fontSize: 15,
-    color: '#fff',
-    fontWeight: '700',
+    color: BLACK,
+    fontWeight: '800',
   },
 });

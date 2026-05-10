@@ -72,43 +72,51 @@ function EditModal({ item, onSave, onCancel }) {
 
 /* ── Item Row ───────────────────────────────────────── */
 function ItemRow({ item, index, onToggle, onEdit, onDelete }) {
+  const checked = Boolean(item.checked);
+
   return (
-    <View style={styles.item}>
-      {/* Index number */}
+    // Tapping anywhere on the row (outside Edit/circle) triggers delete
+    <TouchableOpacity
+      style={styles.item}
+      onPress={() => onDelete(item)}
+      activeOpacity={0.6}
+    >
       <Text style={styles.itemIndex}>{String(index + 1).padStart(2, '0')}</Text>
 
-      {/* Name block */}
       <View style={styles.itemBody}>
         <Text
-          style={[styles.itemName, item.checked && styles.itemNameDone]}
+          style={checked ? [styles.itemName, styles.itemNameDone] : styles.itemName}
           numberOfLines={2}
         >
           {item.name}
         </Text>
       </View>
 
-      {/* Edit button — explicit text label so it's always visible */}
-      <TouchableOpacity style={styles.editPill} onPress={() => onEdit(item)}>
+      {/* Edit pill — inner touchable captures its own press, won't bubble up */}
+      <TouchableOpacity
+        style={styles.editPill}
+        onPress={() => onEdit(item)}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      >
         <Text style={styles.editPillText}>Edit</Text>
       </TouchableOpacity>
 
-      {/* Circle checkbox / delete — tap to toggle, long-press to delete */}
+      {/* Circle toggle — inner touchable captures its own press, won't bubble up */}
       <TouchableOpacity
-        style={[styles.circle, item.checked && styles.circleChecked]}
+        style={checked ? [styles.circle, styles.circleChecked] : styles.circle}
         onPress={() => onToggle(item)}
-        onLongPress={() => onDelete(item)}
-        delayLongPress={500}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        {item.checked && <Text style={styles.circleCheck}>✓</Text>}
+        {checked ? <Text style={styles.circleCheck}>✓</Text> : null}
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 /* ── App ────────────────────────────────────────────── */
 export default function App() {
-  const [items, setItems]         = useState([]);
-  const [input, setInput]         = useState('');
+  const [items, setItems]           = useState([]);
+  const [input, setInput]           = useState('');
   const [editTarget, setEditTarget] = useState(null);
 
   const fetchItems = useCallback(async () => {
@@ -175,8 +183,7 @@ export default function App() {
     fetchItems();
   };
 
-  const checkedCount = items.filter((i) => i.checked).length;
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const checkedCount = items.filter((i) => Boolean(i.checked)).length;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -188,23 +195,23 @@ export default function App() {
         onCancel={() => setEditTarget(null)}
       />
 
-      {/* ── Yellow header ── */}
+      {/* Yellow header */}
       <View style={styles.header}>
         <Text style={styles.appName}>Shopping List.</Text>
-        <Text style={styles.appSub}>PWAM Demo  ·  {today}</Text>
       </View>
 
-      {/* ── White content card ── */}
+      {/* White content card */}
       <View style={styles.card}>
 
         {/* Stats row */}
         <View style={styles.statsRow}>
           <Text style={styles.statsLabel}>
-            Items <Text style={styles.statsCount}>({items.length})</Text>
+            {'Items '}
+            <Text style={styles.statsCount}>({items.length})</Text>
           </Text>
-          {items.length > 0 && (
+          {items.length > 0 ? (
             <Text style={styles.statsDone}>{checkedCount} done</Text>
-          )}
+          ) : null}
         </View>
 
         {/* Add input */}
@@ -223,7 +230,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Divider */}
         <View style={styles.divider} />
 
         {/* List */}
@@ -251,13 +257,6 @@ export default function App() {
             ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
         )}
-
-        {/* Footer hint */}
-        {items.length > 0 && (
-          <View style={styles.footer}>
-            <Text style={styles.footerHint}>Long-press circle to delete</Text>
-          </View>
-        )}
       </View>
     </SafeAreaView>
   );
@@ -270,7 +269,6 @@ const styles = StyleSheet.create({
     backgroundColor: YELLOW,
   },
 
-  /* Header */
   header: {
     backgroundColor: YELLOW,
     paddingHorizontal: 24,
@@ -283,13 +281,7 @@ const styles = StyleSheet.create({
     color: BLACK,
     letterSpacing: -0.5,
   },
-  appSub: {
-    fontSize: 13,
-    color: '#5A5A00',
-    marginTop: 4,
-  },
 
-  /* White card */
   card: {
     flex: 1,
     backgroundColor: '#fff',
@@ -303,7 +295,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  /* Stats */
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -318,13 +309,13 @@ const styles = StyleSheet.create({
   statsCount: {
     color: GRAY,
     fontWeight: '400',
+    fontSize: 16,
   },
   statsDone: {
     fontSize: 13,
     color: GRAY,
   },
 
-  /* Add row */
   addRow: {
     flexDirection: 'row',
     gap: 10,
@@ -360,7 +351,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  /* List */
   list: {
     paddingVertical: 8,
   },
@@ -369,7 +359,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
 
-  /* Item row */
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,11 +387,10 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 
-  /* Edit pill button */
   editPill: {
     backgroundColor: '#FFF9C4',
     borderWidth: 1,
-    borderColor: '#FFD600',
+    borderColor: YELLOW,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -414,7 +402,6 @@ const styles = StyleSheet.create({
     color: '#7A6800',
   },
 
-  /* Circle checkbox */
   circle: {
     width: 28,
     height: 28,
@@ -435,7 +422,6 @@ const styles = StyleSheet.create({
     color: BLACK,
   },
 
-  /* Empty */
   empty: {
     flex: 1,
     alignItems: 'center',
@@ -457,19 +443,7 @@ const styles = StyleSheet.create({
     color: GRAY,
   },
 
-  /* Footer */
-  footer: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  footerHint: {
-    fontSize: 11,
-    color: '#C4C4C4',
-  },
-
-  /* Edit Modal — bottom sheet style */
+  /* Edit Modal */
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',

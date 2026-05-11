@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   FlatList,
   Alert,
-  SafeAreaView,
   Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
 const API = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';

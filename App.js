@@ -327,8 +327,11 @@ export default function App() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.appName}>Shopping List.</Text>
-          <TouchableOpacity style={styles.aiHeaderBtn} onPress={() => setAiVisible(true)}>
-            <Text style={styles.aiHeaderBtnText}>✨ AI</Text>
+          <TouchableOpacity
+            style={[styles.aiHeaderBtn, aiVisible && styles.aiHeaderBtnActive]}
+            onPress={() => setAiVisible((v) => !v)}
+          >
+            <Text style={[styles.aiHeaderBtnText, aiVisible && styles.aiHeaderBtnTextActive]}>✨ AI</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -425,11 +428,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
+  aiHeaderBtnActive: {
+    backgroundColor: YELLOW,
+    borderWidth: 2,
+    borderColor: BLACK,
+  },
   aiHeaderBtnText: {
     color: YELLOW,
     fontWeight: '800',
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  aiHeaderBtnTextActive: {
+    color: BLACK,
   },
 
   card: {

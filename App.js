@@ -10,6 +10,8 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -68,6 +70,122 @@ function EditModal({ item, onSave, onCancel }) {
   );
 }
 
+/* ── AI Suggest Sheet ───────────────────────────────── */
+function AiSuggestSheet({ visible, onClose, onAdd }) {
+  const [prompt, setPrompt]     = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [results, setResults]   = useState([]);
+  const [error, setError]       = useState('');
+  const [addedIdx, setAddedIdx] = useState(new Set());
+
+  useEffect(() => {
+    if (!visible) {
+      setPrompt('');
+      setResults([]);
+      setError('');
+      setAddedIdx(new Set());
+    }
+  }, [visible]);
+
+  const suggest = async () => {
+    if (!prompt.trim() || loading) return;
+    setLoading(true);
+    setError('');
+    setResults([]);
+    setAddedIdx(new Set());
+    try {
+      const res = await fetch(`${API}/ai/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI gagal');
+      setResults(data.items || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addOne = async (name, idx) => {
+    await onAdd(name);
+    setAddedIdx((prev) => {
+      const next = new Set(prev);
+      next.add(idx);
+      return next;
+    });
+  };
+
+  return (
+    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <View style={styles.aiSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Saran AI ✨</Text>
+
+          <View style={styles.aiPromptRow}>
+            <TextInput
+              style={styles.aiPromptInput}
+              value={prompt}
+              onChangeText={setPrompt}
+              placeholder='mau bikin rendang untuk 5 porsi'
+              placeholderTextColor={GRAY}
+              maxLength={500}
+              editable={!loading}
+              returnKeyType="search"
+              onSubmitEditing={suggest}
+            />
+            <TouchableOpacity
+              style={[styles.aiGoBtn, (!prompt.trim() || loading) && styles.aiGoBtnDisabled]}
+              onPress={suggest}
+              disabled={!prompt.trim() || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={YELLOW} />
+              ) : (
+                <Text style={styles.aiGoBtnText}>Tanya</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {error ? <Text style={styles.aiError}>{error}</Text> : null}
+
+          {results.length > 0 ? (
+            <ScrollView style={styles.aiResults} keyboardShouldPersistTaps="handled">
+              <Text style={styles.aiResultsHeader}>
+                {results.length} saran
+              </Text>
+              {results.map((name, idx) => (
+                <View key={idx} style={styles.aiItem}>
+                  <Text style={styles.aiItemName} numberOfLines={2}>{name}</Text>
+                  <TouchableOpacity
+                    style={addedIdx.has(idx) ? styles.aiAddedBtn : styles.aiAddBtn}
+                    onPress={() => addOne(name, idx)}
+                    disabled={addedIdx.has(idx)}
+                  >
+                    <Text style={addedIdx.has(idx) ? styles.aiAddedBtnText : styles.aiAddBtnText}>
+                      {addedIdx.has(idx) ? '✓' : '+ Tambah'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          <TouchableOpacity style={styles.aiCloseBtn} onPress={onClose}>
+            <Text style={styles.aiCloseBtnText}>Tutup</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 /* ── Item Row ───────────────────────────────────────── */
 function ItemRow({ item, index, onToggle, onEdit, onDelete }) {
   const checked = Boolean(item.checked);
@@ -116,6 +234,7 @@ export default function App() {
   const [items, setItems]           = useState([]);
   const [input, setInput]           = useState('');
   const [editTarget, setEditTarget] = useState(null);
+  const [aiVisible, setAiVisible]   = useState(false);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -131,19 +250,24 @@ export default function App() {
     return () => clearInterval(id);
   }, [fetchItems]);
 
-  const addItem = async () => {
-    if (!input.trim()) return;
+  const addItemByName = async (name) => {
+    if (!name || !name.trim()) return;
     try {
       await fetch(`${API}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: input.trim() }),
+        body: JSON.stringify({ name: name.trim() }),
       });
-      setInput('');
       fetchItems();
     } catch {
       Alert.alert('Error', 'Could not connect to the backend.');
     }
+  };
+
+  const addItem = async () => {
+    if (!input.trim()) return;
+    await addItemByName(input);
+    setInput('');
   };
 
   const toggleItem = async (item) => {
@@ -193,9 +317,20 @@ export default function App() {
         onCancel={() => setEditTarget(null)}
       />
 
+      <AiSuggestSheet
+        visible={aiVisible}
+        onClose={() => setAiVisible(false)}
+        onAdd={addItemByName}
+      />
+
       {/* Yellow header */}
       <View style={styles.header}>
-        <Text style={styles.appName}>Shopping List.</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.appName}>Shopping List.</Text>
+          <TouchableOpacity style={styles.aiHeaderBtn} onPress={() => setAiVisible(true)}>
+            <Text style={styles.aiHeaderBtnText}>✨ AI</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* White content card */}
@@ -273,11 +408,28 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 28,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   appName: {
     fontSize: 32,
     fontWeight: '900',
     color: BLACK,
     letterSpacing: -0.5,
+  },
+  aiHeaderBtn: {
+    backgroundColor: BLACK,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  aiHeaderBtnText: {
+    color: YELLOW,
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 
   card: {
@@ -509,5 +661,118 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: BLACK,
     fontWeight: '800',
+  },
+
+  /* AI Suggest Sheet */
+  aiSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    maxHeight: '85%',
+  },
+  aiPromptRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  aiPromptInput: {
+    flex: 1,
+    height: 48,
+    backgroundColor: LIGHT,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: BLACK,
+  },
+  aiGoBtn: {
+    paddingHorizontal: 18,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: BLACK,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiGoBtnDisabled: {
+    opacity: 0.5,
+  },
+  aiGoBtnText: {
+    color: YELLOW,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  aiError: {
+    backgroundColor: '#FEE2E2',
+    color: '#991B1B',
+    padding: 10,
+    borderRadius: 8,
+    fontSize: 13,
+    marginBottom: 10,
+  },
+  aiResults: {
+    backgroundColor: '#FFFDE7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: YELLOW,
+    padding: 12,
+    marginBottom: 12,
+    maxHeight: 360,
+  },
+  aiResultsHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7A6800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  aiItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#FFF59D',
+    gap: 8,
+  },
+  aiItemName: {
+    flex: 1,
+    fontSize: 14,
+    color: BLACK,
+  },
+  aiAddBtn: {
+    backgroundColor: YELLOW,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  aiAddBtnText: {
+    color: BLACK,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  aiAddedBtn: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  aiAddedBtnText: {
+    color: GRAY,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  aiCloseBtn: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
   },
 });

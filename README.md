@@ -85,6 +85,20 @@ pwam-shopping-mobile/
 
 ---
 
+## AI Integration
+
+The mobile app includes an **AI Suggest** bottom sheet that connects to the backend's `/ai/suggest` endpoint.
+
+**How to use:**
+1. Tap the **✨ Saran AI** button in the header to open the suggestion sheet.
+2. Type a natural-language prompt (e.g., *"mau bikin rendang untuk 5 porsi"*).
+3. The AI returns up to 8 suggested shopping items.
+4. Tap **+ Tambah** next to any suggestion to add it directly to your list.
+
+The feature works out of the box once the backend is running with a valid `OPENROUTER_API_KEY`. No extra mobile config is needed.
+
+---
+
 ## Ideas for Improvement
 
 - Split `App.js` into separate component files

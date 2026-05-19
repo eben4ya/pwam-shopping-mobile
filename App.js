@@ -126,12 +126,7 @@ function AiSuggestSheet({ visible, onClose, onAdd }) {
       >
         <View style={styles.aiSheet}>
           <View style={styles.modalHandle} />
-          <View style={styles.aiSheetHeaderRow}>
-            <Text style={styles.modalTitle}>Saran AI ✨</Text>
-            <TouchableOpacity style={styles.aiSheetCloseBtn} onPress={onClose}>
-              <Text style={styles.aiSheetCloseBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.modalTitle}>Saran AI ✨</Text>
 
           <View style={styles.aiPromptRow}>
             <TextInput
@@ -336,7 +331,9 @@ export default function App() {
             style={[styles.aiHeaderBtn, aiVisible && styles.aiHeaderBtnActive]}
             onPress={() => setAiVisible((v) => !v)}
           >
-            <Text style={[styles.aiHeaderBtnText, aiVisible && styles.aiHeaderBtnTextActive]}>✨ AI</Text>
+            <Text style={[styles.aiHeaderBtnText, aiVisible && styles.aiHeaderBtnTextActive]}>
+              {aiVisible ? '✕' : '✨ AI'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -687,27 +684,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 36 : 20,
     maxHeight: '85%',
-  },
-  aiSheetHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  aiSheetCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: LIGHT,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiSheetCloseBtnText: {
-    fontSize: 14,
-    color: GRAY,
-    fontWeight: '700',
   },
   aiPromptRow: {
     flexDirection: 'row',

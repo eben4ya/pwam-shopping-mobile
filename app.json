@@ -2,6 +2,7 @@
   "expo": {
     "name": "pwam-shopping-mobile",
     "slug": "pwam-shopping-mobile",
+    "scheme": "pwamshopping",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,6 +26,10 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-secure-store"
+    ]
   }
 }

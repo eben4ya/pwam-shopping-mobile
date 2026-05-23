@@ -12,11 +12,25 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as SecureStore from 'expo-secure-store';
 
-const API = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
+WebBrowser.maybeCompleteAuthSession();
+
+const API                      = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
+const GOOGLE_CLIENT_ID         = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '';
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
+
+const JWT_KEY = 'jwt';
+
+function authHeader(token) {
+  return { Authorization: `Bearer ${token}` };
+}
 
 const YELLOW = '#FFD600';
 const BLACK  = '#1A1A1A';
@@ -229,34 +243,117 @@ function ItemRow({ item, index, onToggle, onEdit, onDelete }) {
   );
 }
 
+/* ── Login Screen ───────────────────────────────────── */
+function LoginScreen({ onSignIn, loading }) {
+  return (
+    <SafeAreaView style={styles.root}>
+      <StatusBar style="dark" backgroundColor={YELLOW} />
+      <View style={styles.header}>
+        <Text style={styles.appName}>Shopping List.</Text>
+      </View>
+      <View style={[styles.card, styles.loginCard]}>
+        <Text style={styles.loginHint}>Sign in to access your personal list</Text>
+        <TouchableOpacity
+          style={styles.googleBtn}
+          onPress={onSignIn}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.googleBtnText}>
+            {loading ? 'Signing in…' : 'Sign in with Google'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 /* ── App ────────────────────────────────────────────── */
 export default function App() {
-  const [items, setItems]           = useState([]);
-  const [input, setInput]           = useState('');
-  const [editTarget, setEditTarget] = useState(null);
-  const [aiVisible, setAiVisible]   = useState(false);
+  const [token, setToken]             = useState(null);
+  const [user, setUser]               = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [items, setItems]             = useState([]);
+  const [input, setInput]             = useState('');
+  const [editTarget, setEditTarget]   = useState(null);
+  const [aiVisible, setAiVisible]     = useState(false);
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId:        GOOGLE_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    scopes:          ['profile', 'email'],
+  });
+
+  // Load stored token on mount
+  useEffect(() => {
+    SecureStore.getItemAsync(JWT_KEY).then(async (stored) => {
+      if (!stored) { setAuthLoading(false); return; }
+      try {
+        const res = await fetch(`${API}/auth/me`, { headers: authHeader(stored) });
+        if (!res.ok) throw new Error('invalid');
+        const u = await res.json();
+        setToken(stored);
+        setUser(u);
+      } catch {
+        await SecureStore.deleteItemAsync(JWT_KEY);
+      } finally {
+        setAuthLoading(false);
+      }
+    });
+  }, []);
+
+  // Handle Google auth response
+  useEffect(() => {
+    if (response?.type !== 'success') return;
+    const idToken = response.authentication?.idToken;
+    if (!idToken) return;
+
+    fetch(`${API}/auth/google`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ idToken }),
+    })
+      .then((r) => r.json())
+      .then(async (data) => {
+        if (!data.token) throw new Error('no token');
+        await SecureStore.setItemAsync(JWT_KEY, data.token);
+        setToken(data.token);
+        setUser(data.user);
+      })
+      .catch(() => Alert.alert('Error', 'Sign in failed. Please try again.'));
+  }, [response]);
+
+  const handleLogout = async () => {
+    await SecureStore.deleteItemAsync(JWT_KEY);
+    setToken(null);
+    setUser(null);
+    setItems([]);
+  };
 
   const fetchItems = useCallback(async () => {
+    if (!token) return;
     try {
-      const res  = await fetch(`${API}/items`);
+      const res  = await fetch(`${API}/items`, { headers: authHeader(token) });
+      if (res.status === 401) { handleLogout(); return; }
       const data = await res.json();
       setItems(data);
     } catch { /* silent — backend not reachable */ }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
+    if (!token) return;
     fetchItems();
     const id = setInterval(fetchItems, 3000);
     return () => clearInterval(id);
-  }, [fetchItems]);
+  }, [fetchItems, token]);
 
   const addItemByName = async (name) => {
     if (!name || !name.trim()) return;
     try {
       await fetch(`${API}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+        body:    JSON.stringify({ name: name.trim() }),
       });
       fetchItems();
     } catch {
@@ -272,18 +369,18 @@ export default function App() {
 
   const toggleItem = async (item) => {
     await fetch(`${API}/items/${item.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checked: !item.checked }),
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+      body:    JSON.stringify({ checked: !item.checked }),
     });
     fetchItems();
   };
 
   const saveEdit = async (id, name) => {
     await fetch(`${API}/items/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+      body:    JSON.stringify({ name }),
     });
     setEditTarget(null);
     fetchItems();
@@ -301,9 +398,15 @@ export default function App() {
   };
 
   const deleteItem = async (id) => {
-    await fetch(`${API}/items/${id}`, { method: 'DELETE' });
+    await fetch(`${API}/items/${id}`, { method: 'DELETE', headers: authHeader(token) });
     fetchItems();
   };
+
+  if (authLoading) return null;
+
+  if (!token || !user) {
+    return <LoginScreen onSignIn={() => promptAsync()} loading={!request} />;
+  }
 
   const checkedCount = items.filter((i) => Boolean(i.checked)).length;
 
@@ -334,6 +437,15 @@ export default function App() {
             <Text style={[styles.aiHeaderBtnText, aiVisible && styles.aiHeaderBtnTextActive]}>
               {aiVisible ? '✕' : '✨ AI'}
             </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.userRow}>
+          {user.picture ? (
+            <Image source={{ uri: user.picture }} style={styles.avatar} />
+          ) : null}
+          <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+          <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout}>
+            <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -411,7 +523,7 @@ const styles = StyleSheet.create({
     backgroundColor: YELLOW,
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -442,6 +554,61 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   aiHeaderBtnTextActive: {
+    color: BLACK,
+  },
+
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  avatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  userName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: BLACK,
+  },
+  signOutBtn: {
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  signOutText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BLACK,
+  },
+
+  loginCard: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  loginHint: {
+    fontSize: 15,
+    color: GRAY,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  googleBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: BLACK,
   },
 
